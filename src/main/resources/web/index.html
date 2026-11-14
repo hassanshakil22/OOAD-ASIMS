@@ -1,0 +1,296 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ASIMS Dashboard</title>
+<style>
+  :root {
+    --bg: #f4f6f9; --card: #ffffff; --text: #1c2430; --muted: #6b7686; --border: #dde2ea;
+    --accent: #1f6feb; --low: #2e9e5b; --medium: #c99a06; --high: #e0702b; --critical: #d1343b;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #0f141b; --card: #18202b; --text: #e6ebf2; --muted: #8d99aa; --border: #2a3442; --accent: #4c8dff;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #0f141b; --card: #18202b; --text: #e6ebf2; --muted: #8d99aa; --border: #2a3442; --accent: #4c8dff;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: system-ui, -apple-system, "Segoe UI", sans-serif; background: var(--bg); color: var(--text); font-size: 14px; }
+  header { display: flex; align-items: center; justify-content: space-between; padding: 14px 20px; border-bottom: 1px solid var(--border); background: var(--card); }
+  header h1 { margin: 0; font-size: 18px; }
+  header span { color: var(--muted); font-size: 13px; }
+  main { display: grid; grid-template-columns: 320px 1fr; gap: 16px; padding: 16px; max-width: 1400px; margin: 0 auto; }
+  @media (max-width: 900px) { main { grid-template-columns: 1fr; } }
+  .card { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 14px; margin-bottom: 16px; }
+  .card h2 { margin: 0 0 4px; font-size: 15px; }
+  .tag { color: var(--muted); font-size: 12px; margin: 0 0 12px; }
+  label { display: block; font-size: 12px; color: var(--muted); margin: 8px 0 3px; }
+  input, select { width: 100%; padding: 7px 8px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg); color: var(--text); font: inherit; }
+  button { padding: 6px 10px; border: 1px solid var(--border); border-radius: 6px; background: var(--card); color: var(--text); cursor: pointer; font: inherit; font-size: 12px; }
+  button:hover { border-color: var(--accent); }
+  button.primary { background: var(--accent); color: #fff; border-color: var(--accent); width: 100%; margin-top: 12px; padding: 8px; font-size: 14px; }
+  .table-wrap { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; }
+  th, td { text-align: left; padding: 8px 6px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  th { color: var(--muted); font-weight: 500; font-size: 12px; }
+  tr.row { cursor: pointer; }
+  tr.row:hover, tr.selected { background: color-mix(in srgb, var(--accent) 10%, transparent); }
+  .badge { display: inline-block; padding: 2px 7px; border-radius: 10px; font-size: 11px; font-weight: 600; color: #fff; }
+  .LOW { background: var(--low); } .MEDIUM { background: var(--medium); } .HIGH { background: var(--high); } .CRITICAL { background: var(--critical); }
+  .status { font-size: 11px; font-weight: 600; color: var(--muted); }
+  .actions button { margin: 0 3px 3px 0; }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  @media (max-width: 900px) { .grid2 { grid-template-columns: 1fr; } }
+  ul.log { list-style: none; padding: 0; margin: 0; max-height: 220px; overflow-y: auto; }
+  ul.log li { padding: 6px 0; border-bottom: 1px solid var(--border); font-size: 13px; }
+  .muted { color: var(--muted); }
+  .toast { position: fixed; bottom: 20px; right: 20px; background: var(--critical); color: #fff; padding: 10px 14px; border-radius: 8px; display: none; max-width: 360px; }
+  .inline { display: flex; gap: 6px; margin-top: 8px; }
+  .inline input, .inline select { flex: 1; }
+</style>
+</head>
+<body>
+<header>
+  <div>
+    <h1>✈ ASIMS — Aviation Safety Incident Management System</h1>
+    <span>CT-263 OOAD Project · Java</span>
+  </div>
+  <button id="themeBtn" onclick="toggleTheme()">Toggle theme</button>
+</header>
+
+<main>
+  <!-- LEFT: report form -->
+  <section>
+    <div class="card">
+      <h2>Report an Incident</h2>
+      <p class="tag">Factory pattern picks the right subclass from the type</p>
+
+      <label>Incident type</label>
+      <select id="type" onchange="showTypeFields()">
+        <option value="technical">Technical</option>
+        <option value="weather">Weather</option>
+        <option value="airspace">Airspace</option>
+      </select>
+
+      <label>Flight number</label>
+      <input id="flightNumber" value="PK-305">
+      <label>Location</label>
+      <input id="location" value="Islamabad (OPIS)">
+      <label>Severity (1–5)</label>
+      <input id="severity" type="number" min="1" max="5" value="3">
+      <label>Aircraft</label>
+      <select id="aircraft"></select>
+      <label>Reported by</label>
+      <select id="pilotId"></select>
+
+      <div id="fields-technical">
+        <label>Aircraft system</label>
+        <select id="aircraftSystem">
+          <option>Engine</option><option>Hydraulics</option><option>Flight Controls</option>
+          <option>Avionics</option><option>Cabin Pressure</option>
+        </select>
+        <label>Aircraft grounded?</label>
+        <select id="grounded"><option value="true">Yes</option><option value="false">No</option></select>
+      </div>
+      <div id="fields-weather" hidden>
+        <label>Weather type</label>
+        <select id="weatherType">
+          <option>Severe Turbulence</option><option>Wind Shear</option><option>Thunderstorm</option><option>Icing</option>
+        </select>
+        <label>Turbulence level (1–5)</label>
+        <input id="turbulenceLevel" type="number" min="1" max="5" value="3">
+      </div>
+      <div id="fields-airspace" hidden>
+        <label>Closest separation (nautical miles)</label>
+        <input id="separationNm" type="number" step="0.1" value="1.5">
+      </div>
+
+      <button class="primary" onclick="reportIncident()">Report incident</button>
+    </div>
+
+    <div class="card">
+      <h2>Fleet: <span id="fleetName"></span></h2>
+      <p class="tag">Aggregation: Fleet ◇— Aircraft (aircraft exist on their own)</p>
+      <ul class="log" id="fleetList"></ul>
+    </div>
+  </section>
+
+  <!-- RIGHT: incidents + details + notifications -->
+  <section>
+    <div class="card">
+      <h2>Incidents</h2>
+      <p class="tag">Polymorphism: each type calculates its own risk score · click a row for details</p>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th>ID</th><th>Type</th><th>Flight</th><th>Details</th><th>Risk</th><th>Status</th><th>Investigator</th><th>Actions</th></tr>
+          </thead>
+          <tbody id="incidentRows"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="grid2">
+      <div class="card">
+        <h2>Incident details <span id="detailId" class="muted"></span></h2>
+        <p class="tag">Composition: Incident ◆— EvidenceLog (evidence is deleted with the incident)</p>
+        <div id="detailBody" class="muted">Select an incident above.</div>
+      </div>
+
+      <div class="card">
+        <h2>Observer notifications</h2>
+        <p class="tag">Observer pattern: listeners are notified automatically</p>
+        <div id="observers"></div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<div class="toast" id="toast"></div>
+
+<script>
+  let data = null;
+  let selectedId = null;
+
+  // ---------- Talking to the Java server ----------
+  async function loadData() {
+    const res = await fetch('/api/data');
+    data = await res.json();
+    render();
+  }
+
+  async function post(url, body) {
+    const res = await fetch(url, { method: 'POST', body: JSON.stringify(body) });
+    const result = await res.json();
+    if (result.error) showToast(result.error);
+    await loadData();
+  }
+
+  // ---------- Actions ----------
+  function reportIncident() {
+    const type = val('type');
+    const body = {
+      type, flightNumber: val('flightNumber'), location: val('location'),
+      severity: val('severity'), aircraft: val('aircraft'), pilotId: val('pilotId')
+    };
+    if (type === 'technical') { body.aircraftSystem = val('aircraftSystem'); body.grounded = val('grounded'); }
+    if (type === 'weather')   { body.weatherType = val('weatherType'); body.turbulenceLevel = val('turbulenceLevel'); }
+    if (type === 'airspace')  { body.separationNm = val('separationNm'); }
+    post('/api/report', body);
+  }
+  const escalate = id => post('/api/escalate', { incidentId: id });
+  const closeInc = id => post('/api/close', { incidentId: id });
+  function deleteInc(id) {
+    if (selectedId === id) selectedId = null;
+    post('/api/delete', { incidentId: id });
+  }
+  function assign(id) {
+    post('/api/assign', { incidentId: id, investigatorId: val('assignSelect') });
+  }
+  function addEvidence(id) {
+    const description = val('evidenceText').trim();
+    if (!description) return showToast('Type a description first');
+    post('/api/evidence', { incidentId: id, description, collectedBy: val('evidenceBy') });
+  }
+
+  // ---------- Drawing the page ----------
+  function render() {
+    fillSelect('aircraft', data.aircraft.map(a => [a.registration, a.registration + ' — ' + a.model]));
+    fillSelect('pilotId', data.pilots.map(p => [p.id, p.name]));
+
+    document.getElementById('fleetName').textContent = data.fleetName;
+    document.getElementById('fleetList').innerHTML = data.aircraft
+      .map(a => `<li><b>${esc(a.registration)}</b> <span class="muted">${esc(a.model)}</span></li>`).join('');
+
+    document.getElementById('incidentRows').innerHTML = data.incidents.map(i => `
+      <tr class="row ${i.id === selectedId ? 'selected' : ''}" onclick="select('${i.id}')">
+        <td><b>${i.id}</b></td>
+        <td>${esc(i.type)}</td>
+        <td>${esc(i.flightNumber)}</td>
+        <td class="muted">${esc(i.details)}</td>
+        <td><span class="badge ${i.riskLevel}">${i.riskScore} ${i.riskLevel}</span></td>
+        <td class="status">${i.status.replace('_', ' ')}</td>
+        <td>${i.investigator ? esc(i.investigator) : '<span class="muted">—</span>'}</td>
+        <td class="actions" onclick="event.stopPropagation()">
+          <button onclick="escalate('${i.id}')">Escalate</button>
+          <button onclick="closeInc('${i.id}')">Close</button>
+          <button onclick="deleteInc('${i.id}')">Delete</button>
+        </td>
+      </tr>`).join('') || '<tr><td colspan="8" class="muted">No incidents.</td></tr>';
+
+    document.getElementById('observers').innerHTML = data.observers.map(o => `
+      <p><b>${esc(o.name)}</b> <span class="muted">(${o.notifications.length})</span></p>
+      <ul class="log">${o.notifications.slice().reverse().map(n => `<li>${esc(n)}</li>`).join('')
+        || '<li class="muted">Nothing yet.</li>'}</ul>`).join('');
+
+    renderDetails();
+  }
+
+  function select(id) { selectedId = id; render(); }
+
+  function renderDetails() {
+    const i = data.incidents.find(x => x.id === selectedId);
+    document.getElementById('detailId').textContent = i ? i.id : '';
+    if (!i) {
+      document.getElementById('detailBody').innerHTML = selectedId
+        ? 'Incident deleted — its evidence was deleted with it (composition).'
+        : 'Select an incident above.';
+      return;
+    }
+    const people = [...data.pilots, ...data.investigators];
+    document.getElementById('detailBody').innerHTML = `
+      <p><b>${esc(i.type)} incident</b> · flight ${esc(i.flightNumber)} · ${esc(i.location)}<br>
+        <span class="muted">Aircraft ${esc(i.aircraft)} · reported by ${esc(i.reportedBy)} at ${esc(i.reportedAt)} · severity ${i.severity}/5</span></p>
+
+      <label>Assign investigator</label>
+      <div class="inline">
+        <select id="assignSelect">${data.investigators.map(v => `<option value="${v.id}">${esc(v.name)} — ${esc(v.specialization)}</option>`).join('')}</select>
+        <button onclick="assign('${i.id}')">Assign</button>
+      </div>
+
+      <label>Evidence (${i.evidence.length})</label>
+      <ul class="log">${i.evidence.map(e => `<li><b>${e.id}</b> ${esc(e.description)}<br><span class="muted">${esc(e.collectedBy)} · ${esc(e.collectedAt)}</span></li>`).join('')
+        || '<li class="muted">No evidence yet.</li>'}</ul>
+      <div class="inline">
+        <input id="evidenceText" placeholder="New evidence description">
+      </div>
+      <div class="inline">
+        <select id="evidenceBy">${people.map(p => `<option>${esc(p.name)}</option>`).join('')}</select>
+        <button onclick="addEvidence('${i.id}')">Add evidence</button>
+      </div>`;
+  }
+
+  // ---------- Small helpers ----------
+  function showTypeFields() {
+    ['technical', 'weather', 'airspace'].forEach(t =>
+      document.getElementById('fields-' + t).hidden = t !== val('type'));
+  }
+  function fillSelect(id, options) {
+    const el = document.getElementById(id);
+    const current = el.value;
+    el.innerHTML = options.map(([v, text]) => `<option value="${esc(v)}">${esc(text)}</option>`).join('');
+    if (current) el.value = current;
+  }
+  function val(id) { return document.getElementById(id).value; }
+  function esc(s) {
+    return String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  }
+  function showToast(msg) {
+    const t = document.getElementById('toast');
+    t.textContent = msg; t.style.display = 'block';
+    clearTimeout(t.timer); t.timer = setTimeout(() => t.style.display = 'none', 3500);
+  }
+  function toggleTheme() {
+    const dark = document.documentElement.dataset.theme
+      ? document.documentElement.dataset.theme === 'dark'
+      : matchMedia('(prefers-color-scheme: dark)').matches;
+    document.documentElement.dataset.theme = dark ? 'light' : 'dark';
+  }
+
+  loadData();
+</script>
+</body>
+</html>
