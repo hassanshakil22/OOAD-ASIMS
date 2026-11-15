@@ -290,6 +290,8 @@
     document.documentElement.dataset.theme = dark ? 'light' : 'dark';
   }
 
+  // Opening the page as /#INC-101 pre-selects that incident
+  if (location.hash) selectedId = location.hash.slice(1);
   loadData();
 </script>
 </body>
