@@ -317,6 +317,223 @@ WebServer --> "1" IncidentService
 @enduml
 ```
 
+### 3a. Class Diagram, Part A: Domain Model (used in the printed report)
+
+The full class diagram above is too wide to read on A4 paper, so the report splits it into two parts. The names and relationships are identical to the full diagram.
+
+```plantuml
+@startuml
+skinparam classAttributeIconSize 0
+hide empty members
+title Class Diagram (Part A): Domain Model — package com.asims.model
+
+enum IncidentStatus {
+  REPORTED
+  UNDER_INVESTIGATION
+  ESCALATED
+  CLOSED
+}
+
+abstract class Incident {
+  - id : String
+  - flightNumber : String
+  - location : String
+  - reportedAt : String
+  - severity : int
+  - status : IncidentStatus
+  - aircraft : Aircraft
+  - reportedBy : Pilot
+  - assignedInvestigator : Investigator
+  - evidenceLogs : List<EvidenceLog>
+  # Incident(id, flightNumber, location, severity, aircraft, reportedBy)
+  + {abstract} calculateRiskScore() : int
+  + {abstract} getType() : String
+  + {abstract} getDetails() : String
+  + requiresMaintenance() : boolean
+  + getRiskLevel() : String
+  + addEvidence(description : String, collectedBy : String) : EvidenceLog
+  + assignInvestigator(investigator : Investigator) : void
+  + escalate() : void
+  + close() : void
+  + setSeverity(severity : int) : void
+  + getEvidenceLogs() : List<EvidenceLog>
+}
+
+class TechnicalIncident {
+  - aircraftSystem : String
+  - grounded : boolean
+  + calculateRiskScore() : int
+  + requiresMaintenance() : boolean
+  + getType() : String
+  + getDetails() : String
+  - isCriticalSystem() : boolean
+}
+
+class WeatherIncident {
+  - weatherType : String
+  - turbulenceLevel : int
+  + calculateRiskScore() : int
+  + getType() : String
+  + getDetails() : String
+}
+
+class AirspaceIncident {
+  - separationNm : double
+  + calculateRiskScore() : int
+  + getType() : String
+  + getDetails() : String
+}
+
+class EvidenceLog {
+  - id : String
+  - description : String
+  - collectedBy : String
+  - collectedAt : String
+  ~ EvidenceLog(id, description, collectedBy)
+}
+
+abstract class StaffMember {
+  - id : String
+  - name : String
+  + {abstract} getRole() : String
+}
+
+class Pilot {
+  - rank : String
+  + getRole() : String
+}
+
+class Investigator {
+  - specialization : String
+  + getRole() : String
+}
+
+class Aircraft {
+  - registration : String
+  - model : String
+}
+
+class Fleet {
+  - airlineName : String
+  - aircraftList : List<Aircraft>
+  + addAircraft(aircraft : Aircraft) : void
+  + removeAircraft(aircraft : Aircraft) : void
+  + findAircraft(registration : String) : Aircraft
+}
+
+Incident <|-- TechnicalIncident
+Incident <|-- WeatherIncident
+Incident <|-- AirspaceIncident
+StaffMember <|-- Pilot
+StaffMember <|-- Investigator
+
+Incident "1" *-left- "0..*" EvidenceLog : owns >
+Fleet "1" o-- "0..*" Aircraft : contains >
+Incident "0..*" --> "1" Aircraft : involves >
+Incident "0..*" -right-> "1" Pilot : reportedBy >
+Incident "0..*" -right-> "0..1" Investigator : assignedInvestigator >
+Incident -left-> IncidentStatus
+EvidenceLog -[hidden]down- IncidentStatus
+together {
+  abstract class StaffMember
+  class Pilot
+  class Investigator
+}
+together {
+  class Fleet
+  class Aircraft
+}
+Investigator -[hidden]down- Fleet
+@enduml
+```
+
+### 3b. Class Diagram, Part B: Design Patterns and Web Layer (used in the printed report)
+
+```plantuml
+@startuml
+skinparam classAttributeIconSize 0
+hide empty members
+title Class Diagram (Part B): Design Patterns and Web — packages com.asims.pattern, com.asims.web
+
+package model <<Frame>> {
+  abstract class Incident
+  class TechnicalIncident
+  class WeatherIncident
+  class AirspaceIncident
+  class Fleet
+}
+
+class IncidentRegistry <<Singleton>> {
+  - {static} instance : IncidentRegistry
+  - incidents : Map<String, Incident>
+  - nextNumber : int
+  - IncidentRegistry()
+  + {static} getInstance() : IncidentRegistry
+  + generateId() : String
+  + add(incident : Incident) : void
+  + findById(id : String) : Incident
+  + remove(id : String) : void
+  + getAll() : List<Incident>
+}
+
+class IncidentFactory <<Factory>> {
+  + {static} create(type, id, flightNumber, location, severity, aircraft, reportedBy, extra) : Incident
+}
+
+interface IncidentObserver <<Observer>> {
+  + update(event : String, incident : Incident) : void
+  + getName() : String
+  + getNotifications() : List<String>
+}
+
+class AuthorityNotifier {
+  - notifications : List<String>
+  + update(event : String, incident : Incident) : void
+}
+
+class MaintenanceNotifier {
+  - notifications : List<String>
+  + update(event : String, incident : Incident) : void
+}
+
+class IncidentService <<Facade>> {
+  - registry : IncidentRegistry
+  - fleet : Fleet
+  - pilots : Map<String, Pilot>
+  - investigators : Map<String, Investigator>
+  - observers : List<IncidentObserver>
+  + addObserver(observer : IncidentObserver) : void
+  - notifyObservers(event : String, incident : Incident) : void
+  + reportIncident(type, flightNumber, location, severity, aircraftRegistration, pilotId, extra) : Incident
+  + assignInvestigator(incidentId : String, investigatorId : String) : void
+  + addEvidence(incidentId : String, description : String, collectedBy : String) : void
+  + escalateIncident(incidentId : String) : void
+  + closeIncident(incidentId : String) : void
+  + deleteIncident(incidentId : String) : void
+}
+
+class WebServer {
+  - service : IncidentService
+  + start(port : int) : void
+}
+
+IncidentObserver <|.. AuthorityNotifier
+IncidentObserver <|.. MaintenanceNotifier
+WebServer --> "1" IncidentService
+IncidentService --> "1" IncidentRegistry
+IncidentService --> "1" Fleet
+IncidentService --> "0..*" IncidentObserver : notifies >
+IncidentService ..> IncidentFactory : <<use>>
+IncidentRegistry "1" o-- "0..*" Incident : stores >
+IncidentFactory ..> TechnicalIncident : <<create>>
+IncidentFactory ..> WeatherIncident : <<create>>
+IncidentFactory ..> AirspaceIncident : <<create>>
+Incident <|-- TechnicalIncident
+Incident <|-- WeatherIncident
+Incident <|-- AirspaceIncident
+@enduml
+```
+
 ---
 
 ## 4. Object Diagram: snapshot right after startup
