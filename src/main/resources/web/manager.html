@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ASIMS Incident Management Portal</title>
+<link rel="stylesheet" href="/static/common.css">
+</head>
+<body>
+<header id="hdr"></header>
+<main>
+  <div class="tiles" id="tiles"></div>
+
+  <div class="card">
+    <h2>Case queue</h2>
+    <p class="tag">Incidents escalated by the admin · select one to assign an investigator, add evidence or close it · updates automatically</p>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>ID</th><th>Type</th><th>Flight</th><th>Details</th><th>Risk</th><th>Status</th><th>Investigator</th></tr></thead>
+        <tbody id="rows"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="grid2">
+    <div class="card">
+      <h2>Case file <span id="detailId" class="muted"></span></h2>
+      <div id="detailBody" class="muted">Select an incident above.</div>
+    </div>
+    <div class="card">
+      <h2>Notifications</h2>
+      <p class="tag">Observer pattern: you are notified when the admin escalates an incident</p>
+      <div id="observers"></div>
+    </div>
+  </div>
+</main>
+<div class="toast" id="toast"></div>
+<script src="/static/common.js"></script>
+<script>
+  const assign = id => act('/api/assign', { incidentId: id, investigatorId: val('assignSelect') }, 'Investigator assigned.');
+  const closeCase = id => act('/api/close', { incidentId: id }, id + ' closed.');
+  function addEvidence(id) {
+    const description = val('evidenceText').trim();
+    if (!description) return toast('Type a description first', false);
+    act('/api/evidence', { incidentId: id, description }, 'Evidence added.');
+  }
+
+  function actionsHtml(i) {
+    const options = data.investigators.map(v =>
+      `<option value="${esc(v.id)}">${esc(v.name)} — ${esc(v.specialization)}</option>`).join('');
+    let html = '';
+    if (i.status === 'ESCALATED' || i.status === 'UNDER_INVESTIGATION') {
+      html += `<label>${i.status === 'ESCALATED' ? 'Assign an investigator to start the investigation' : 'Reassign investigator'}</label>
+        <div class="inline"><select id="assignSelect">${options}</select><button class="go" onclick="assign('${i.id}')">Assign</button></div>`;
+    }
+    if (i.status === 'UNDER_INVESTIGATION') {
+      html += `<textarea id="evidenceText" placeholder="Add evidence or an investigation finding"></textarea>
+        <div class="inline"><button class="go" onclick="addEvidence('${i.id}')">Add evidence</button>
+        <button class="warn" onclick="closeCase('${i.id}')">Close case</button></div>`;
+    }
+    if (i.status === 'CLOSED') html += '<p class="muted">This case is closed.</p>';
+    return html;
+  }
+
+  function render() {
+    renderHeader(data.me, 'Incident management portal — investigate escalated incidents');
+    const count = s => data.incidents.filter(i => i.status === s).length;
+    document.getElementById('tiles').innerHTML =
+      [['Waiting for an investigator', count('ESCALATED')], ['Under investigation', count('UNDER_INVESTIGATION')], ['Closed', count('CLOSED')]]
+        .map(t => `<div class="tile"><b>${t[1]}</b><span>${t[0]}</span></div>`).join('');
+
+    // open cases first (escalated, then under investigation), closed cases last
+    const order = { ESCALATED: 0, UNDER_INVESTIGATION: 1, CLOSED: 2 };
+    const sorted = data.incidents.slice().sort((a, b) => order[a.status] - order[b.status]);
+    document.getElementById('rows').innerHTML = sorted.map(i => `
+      <tr class="row ${i.id === selectedId ? 'selected' : ''}" onclick="select('${i.id}')">
+        <td><b>${i.id}</b></td><td>${esc(i.type)}</td><td>${esc(i.flightNumber)}</td>
+        <td class="muted">${esc(i.details)}</td><td>${riskBadge(i)}</td><td>${statusText(i.status)}</td>
+        <td>${i.investigator ? esc(i.investigator) : '<span class="muted">—</span>'}</td>
+      </tr>`).join('') || '<tr><td colspan="7" class="muted">Nothing has been escalated yet.</td></tr>';
+
+    const i = data.incidents.find(x => x.id === selectedId);
+    document.getElementById('detailId').textContent = i ? i.id : '';
+    document.getElementById('detailBody').innerHTML = !i ? 'Select an incident above.'
+      : pipeline(i.status) + infoHtml(i) + evidenceHtml(i) + actionsHtml(i);
+    document.getElementById('observers').innerHTML = notificationsHtml(data.observers);
+  }
+
+  loadData(true);
+  setInterval(() => loadData(false), 4000);
+</script>
+</body>
+</html>

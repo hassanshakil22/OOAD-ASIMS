@@ -26,7 +26,6 @@ public class IncidentRegistry {
     private int nextNumber = 101;
 
     private IncidentRegistry() {
-        // private: stops other classes from creating a second registry
     }
 
     /** "synchronized" makes it safe if two threads call this at the same time. */
@@ -43,6 +42,12 @@ public class IncidentRegistry {
 
     public void add(Incident incident) {
         incidents.put(incident.getId(), incident);
+        // Incidents loaded from the database already own ids like INC-107:
+        // make sure the next generated id does not clash with them.
+        String number = incident.getId().replaceAll("\\D", "");
+        if (!number.isEmpty()) {
+            nextNumber = Math.max(nextNumber, Integer.parseInt(number) + 1);
+        }
     }
 
     public Incident findById(String id) {

@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ASIMS Login</title>
+<link rel="stylesheet" href="/static/common.css">
+</head>
+<body>
+<div class="login-wrap">
+  <form class="login-card" onsubmit="return signIn(event)">
+    <h1>✈ ASIMS</h1>
+    <p class="tag">Aviation Safety Incident Management System — please log in</p>
+    <label for="username">Username</label>
+    <input id="username" autocomplete="username" autofocus required>
+    <label for="password">Password</label>
+    <input id="password" type="password" autocomplete="current-password" required>
+    <button class="primary" type="submit">Log in</button>
+    <div class="error" id="error"></div>
+
+    <details class="demo">
+      <summary>Demo accounts (for the lab demonstration)</summary>
+      <table>
+        <tr><th>Role</th><th>Username</th><th>Password</th></tr>
+        <tr><td>Admin</td><td>admin</td><td>admin123</td></tr>
+        <tr><td>Incident Manager</td><td>manager</td><td>manager123</td></tr>
+        <tr><td>Pilot</td><td>tariq, hina, imran, zainab</td><td>pilot123</td></tr>
+      </table>
+    </details>
+  </form>
+</div>
+<div class="toast" id="toast"></div>
+<script src="/static/common.js"></script>
+<script>
+  async function signIn(event) {
+    event.preventDefault();
+    document.getElementById('error').textContent = '';
+    try {
+      const result = await api('/api/login', { username: val('username'), password: val('password') });
+      location.href = result.redirect;
+    } catch (e) {
+      document.getElementById('error').textContent = e.message;
+    }
+    return false;
+  }
+</script>
+</body>
+</html>

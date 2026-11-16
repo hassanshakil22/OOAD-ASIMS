@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ASIMS Admin Portal</title>
+<link rel="stylesheet" href="/static/common.css">
+</head>
+<body>
+<header id="hdr"></header>
+<main>
+  <div class="tiles" id="tiles"></div>
+
+  <div class="card">
+    <h2>Inbox — reports waiting for your review</h2>
+    <p class="tag">Review each report, then escalate it to Incident Management · new reports appear automatically</p>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>ID</th><th>Type</th><th>Flight</th><th>Details</th><th>Risk</th><th>Reported by</th><th>Time</th><th>Actions</th></tr></thead>
+        <tbody id="inbox"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>All incidents</h2>
+    <p class="tag">Click a row to see its details</p>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>ID</th><th>Type</th><th>Flight</th><th>Risk</th><th>Status</th><th>Reported by</th><th>Investigator</th><th>Actions</th></tr></thead>
+        <tbody id="all"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="grid2">
+    <div class="card">
+      <h2>Incident details <span id="detailId" class="muted"></span></h2>
+      <div id="detailBody" class="muted">Select an incident above.</div>
+    </div>
+    <div class="card">
+      <h2>Notifications</h2>
+      <p class="tag">Observer pattern: sent automatically when incidents change</p>
+      <div id="observers"></div>
+    </div>
+  </div>
+</main>
+<div class="toast" id="toast"></div>
+<script src="/static/common.js"></script>
+<script>
+  const escalate = id => act('/api/escalate', { incidentId: id }, id + ' escalated to Incident Management.');
+  function deleteIncident(id) {
+    if (!confirm('Delete ' + id + ' and all of its evidence?')) return;
+    if (selectedId === id) selectedId = null;
+    act('/api/delete', { incidentId: id }, id + ' deleted.');
+  }
+
+  function render() {
+    renderHeader(data.me, 'Admin portal — review reported incidents and escalate them');
+    const count = s => data.incidents.filter(i => i.status === s).length;
+    document.getElementById('tiles').innerHTML =
+      [['Awaiting review', count('REPORTED')], ['Escalated', count('ESCALATED')],
+       ['Under investigation', count('UNDER_INVESTIGATION')], ['Closed', count('CLOSED')]]
+        .map(t => `<div class="tile"><b>${t[1]}</b><span>${t[0]}</span></div>`).join('');
+
+    const waiting = data.incidents.filter(i => i.status === 'REPORTED');
+    document.getElementById('inbox').innerHTML = waiting.map(i => `
+      <tr class="row ${i.id === selectedId ? 'selected' : ''}" onclick="select('${i.id}')">
+        <td><b>${i.id}</b></td><td>${esc(i.type)}</td><td>${esc(i.flightNumber)}</td>
+        <td class="muted">${esc(i.details)}</td><td>${riskBadge(i)}</td>
+        <td>${esc(i.reportedBy)}</td><td class="muted">${esc(i.reportedAt)}</td>
+        <td class="actions" onclick="event.stopPropagation()">
+          <button class="warn" onclick="escalate('${i.id}')">Escalate</button>
+          <button class="danger" onclick="deleteIncident('${i.id}')">Delete</button>
+        </td>
+      </tr>`).join('') || '<tr><td colspan="8" class="muted">Inbox is empty — nothing waiting for review.</td></tr>';
+
+    document.getElementById('all').innerHTML = data.incidents.map(i => `
+      <tr class="row ${i.id === selectedId ? 'selected' : ''}" onclick="select('${i.id}')">
+        <td><b>${i.id}</b></td><td>${esc(i.type)}</td><td>${esc(i.flightNumber)}</td><td>${riskBadge(i)}</td>
+        <td>${statusText(i.status)}</td><td>${esc(i.reportedBy)}</td>
+        <td>${i.investigator ? esc(i.investigator) : '<span class="muted">—</span>'}</td>
+        <td class="actions" onclick="event.stopPropagation()">
+          <button class="danger" onclick="deleteIncident('${i.id}')">Delete</button>
+        </td>
+      </tr>`).join('') || '<tr><td colspan="8" class="muted">No incidents.</td></tr>';
+
+    const i = data.incidents.find(x => x.id === selectedId);
+    document.getElementById('detailId').textContent = i ? i.id : '';
+    document.getElementById('detailBody').innerHTML = i ? pipeline(i.status) + infoHtml(i) + evidenceHtml(i)
+      : (selectedId ? 'Incident deleted — its evidence was deleted with it (composition).' : 'Select an incident above.');
+    document.getElementById('observers').innerHTML = notificationsHtml(data.observers);
+  }
+
+  loadData(true);
+  setInterval(() => loadData(false), 4000);
+</script>
+</body>
+</html>

@@ -1,0 +1,129 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ASIMS Pilot Portal</title>
+<link rel="stylesheet" href="/static/common.css">
+</head>
+<body>
+<header id="hdr"></header>
+<main>
+  <div class="layout">
+    <section>
+      <div class="card">
+        <h2>Report an Incident</h2>
+        <p class="tag">Your report goes to the admin for review</p>
+
+        <label>Incident type</label>
+        <select id="type" onchange="showTypeFields()">
+          <option value="technical">Technical</option>
+          <option value="weather">Weather</option>
+          <option value="airspace">Airspace</option>
+        </select>
+        <label>Flight number</label>
+        <input id="flightNumber" placeholder="e.g. PK-305">
+        <label>Location</label>
+        <input id="location" placeholder="e.g. Islamabad (OPIS)">
+        <label>Severity (1–5)</label>
+        <input id="severity" type="number" min="1" max="5" value="3">
+        <label>Aircraft</label>
+        <select id="aircraft"></select>
+
+        <div id="fields-technical">
+          <label>Aircraft system</label>
+          <select id="aircraftSystem">
+            <option>Engine</option><option>Hydraulics</option><option>Flight Controls</option>
+            <option>Avionics</option><option>Cabin Pressure</option>
+          </select>
+          <label>Aircraft grounded?</label>
+          <select id="grounded"><option value="true">Yes</option><option value="false">No</option></select>
+        </div>
+        <div id="fields-weather" hidden>
+          <label>Weather type</label>
+          <select id="weatherType">
+            <option>Severe Turbulence</option><option>Wind Shear</option><option>Thunderstorm</option><option>Icing</option>
+          </select>
+          <label>Turbulence level (1–5)</label>
+          <input id="turbulenceLevel" type="number" min="1" max="5" value="3">
+        </div>
+        <div id="fields-airspace" hidden>
+          <label>Closest separation (nautical miles)</label>
+          <input id="separationNm" type="number" step="0.1" value="1.5">
+        </div>
+
+        <button class="primary" onclick="reportIncident()">Submit report</button>
+      </div>
+    </section>
+
+    <section>
+      <div class="card">
+        <h2>My Incident Reports</h2>
+        <p class="tag">Click a report to follow it through the process · updates automatically</p>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>ID</th><th>Type</th><th>Flight</th><th>Details</th><th>Risk</th><th>Status</th></tr></thead>
+            <tbody id="rows"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>Report details <span id="detailId" class="muted"></span></h2>
+        <div id="detailBody" class="muted">Select one of your reports above.</div>
+      </div>
+    </section>
+  </div>
+</main>
+<div class="toast" id="toast"></div>
+<script src="/static/common.js"></script>
+<script>
+  function showTypeFields() {
+    ['technical', 'weather', 'airspace'].forEach(t => document.getElementById('fields-' + t).hidden = t !== val('type'));
+  }
+
+  function reportIncident() {
+    const type = val('type');
+    const body = { type, flightNumber: val('flightNumber'), location: val('location'), severity: val('severity'), aircraft: val('aircraft') };
+    if (type === 'technical') { body.aircraftSystem = val('aircraftSystem'); body.grounded = val('grounded'); }
+    if (type === 'weather')   { body.weatherType = val('weatherType'); body.turbulenceLevel = val('turbulenceLevel'); }
+    if (type === 'airspace')  { body.separationNm = val('separationNm'); }
+    act('/api/report', body, 'Report submitted — the admin has been notified.').then(() => {
+      if (data && data.incidents.length) selectedId = data.incidents[0].id;
+      render();
+    });
+  }
+
+  function addEvidence(id) {
+    const description = val('evidenceText').trim();
+    if (!description) return toast('Type a description first', false);
+    act('/api/evidence', { incidentId: id, description }, 'Evidence added.');
+  }
+
+  function render() {
+    renderHeader(data.me, 'Pilot portal — report incidents and follow their progress');
+    const select_ = document.getElementById('aircraft');
+    const current = select_.value;
+    select_.innerHTML = data.aircraft.map(a => `<option value="${esc(a.registration)}">${esc(a.registration)} — ${esc(a.model)}</option>`).join('');
+    if (current) select_.value = current;
+
+    document.getElementById('rows').innerHTML = data.incidents.map(i => `
+      <tr class="row ${i.id === selectedId ? 'selected' : ''}" onclick="select('${i.id}')">
+        <td><b>${i.id}</b></td><td>${esc(i.type)}</td><td>${esc(i.flightNumber)}</td>
+        <td class="muted">${esc(i.details)}</td><td>${riskBadge(i)}</td><td>${statusText(i.status)}</td>
+      </tr>`).join('') || '<tr><td colspan="6" class="muted">You have not reported any incidents yet.</td></tr>';
+
+    const i = data.incidents.find(x => x.id === selectedId);
+    document.getElementById('detailId').textContent = i ? i.id : '';
+    document.getElementById('detailBody').innerHTML = !i ? 'Select one of your reports above.' : `
+      ${pipeline(i.status)}${infoHtml(i)}${evidenceHtml(i)}
+      <textarea id="evidenceText" placeholder="Add more evidence (e.g. what you saw, readings, crew statements)"></textarea>
+      <div class="inline"><button class="go" onclick="addEvidence('${i.id}')">Add evidence</button></div>`;
+  }
+
+  showTypeFields();
+  loadData(true);
+  setInterval(() => loadData(false), 8000);
+</script>
+</body>
+</html>
