@@ -1,5 +1,7 @@
 package com.asims.model;
 
+import java.util.Map;
+
 /**
  * Two aircraft came closer than allowed (a "loss of separation").
  *
@@ -39,6 +41,11 @@ public class AirspaceIncident extends Incident {
     @Override
     public String getDetails() {
         return "Closest separation: " + separationNm + " nm";
+    }
+
+    @Override
+    public Map<String, String> getExtraFields() {
+        return Map.of("separationNm", String.valueOf(separationNm));
     }
 
     public double getSeparationNm() { return separationNm; }

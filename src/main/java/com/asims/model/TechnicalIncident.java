@@ -1,5 +1,7 @@
 package com.asims.model;
 
+import java.util.Map;
+
 /**
  * A mechanical or system failure on the aircraft (engine, hydraulics, ...).
  *
@@ -48,6 +50,11 @@ public class TechnicalIncident extends Incident {
     @Override
     public String getDetails() {
         return "System: " + aircraftSystem + ", Grounded: " + (grounded ? "yes" : "no");
+    }
+
+    @Override
+    public Map<String, String> getExtraFields() {
+        return Map.of("aircraftSystem", aircraftSystem, "grounded", String.valueOf(grounded));
     }
 
     public String getAircraftSystem() { return aircraftSystem; }

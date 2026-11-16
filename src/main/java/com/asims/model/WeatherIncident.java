@@ -1,5 +1,7 @@
 package com.asims.model;
 
+import java.util.Map;
+
 /**
  * A weather-related hazard (turbulence, wind shear, thunderstorm, ...).
  *
@@ -34,6 +36,11 @@ public class WeatherIncident extends Incident {
     @Override
     public String getDetails() {
         return weatherType + ", Turbulence level: " + turbulenceLevel + "/5";
+    }
+
+    @Override
+    public Map<String, String> getExtraFields() {
+        return Map.of("weatherType", weatherType, "turbulenceLevel", String.valueOf(turbulenceLevel));
     }
 
     public String getWeatherType() { return weatherType; }
