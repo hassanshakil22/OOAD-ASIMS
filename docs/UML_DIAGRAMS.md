@@ -1,23 +1,15 @@
 # ASIMS — UML Diagrams
 
-All 8 diagrams are written in **PlantUML**, using the exact class, field and method names from the Java code in `src/main/java/com/asims`.
+All 8 diagrams are written in **PlantUML**, using the exact class, attribute and method names from the Java code in `src/main/java/com/asims`.
+Ready-made SVG images of every diagram are in the `UML_DIAGRAMS/` folder (same file names as below).
 
-**How to turn them into images:**
-1. Copy a code block into https://www.plantuml.com/plantuml (or use the PlantUML plugin in IntelliJ / VS Code).
-2. Export it as PNG for the report.
+**To redraw one:** paste its code block into https://www.plantuml.com/plantuml, or use the PlantUML extension in VS Code (`Alt + D`).
 
 ---
 
 ## 1. Use Case Diagram
 
-**Actors:**
-- **Pilot**: reports incidents and adds evidence.
-- **Safety Investigator**: investigates, escalates and closes incidents.
-- **Aviation Authority** and **Maintenance Team**: external actors that receive notifications. This is the Observer pattern.
-
-**Relationships:**
-- `<<include>>`: a step that always happens.
-- `<<extend>>`: a step that only happens under a condition.
+Actors: Pilot, Admin, Incident Manager (each with their own portal) and the external Aviation Authority and Maintenance Team. Every user must log in. `<<include>>` marks steps that always happen; `<<extend>>` marks a step that only happens under a condition (aircraft grounded).
 
 ```plantuml
 @startuml
@@ -25,301 +17,110 @@ left to right direction
 skinparam packageStyle rectangle
 
 actor Pilot
-actor "Safety Investigator" as Investigator
+actor "Admin" as Admin
+actor "Incident Manager" as Manager
 actor "Aviation Authority" as Authority
 actor "Maintenance Team" as Maintenance
 
 rectangle "ASIMS" {
+  usecase "Log in" as UC0
   usecase "Report Incident" as UC1
   usecase "Calculate Risk Score" as UC2
-  usecase "Notify Authority" as UC3
-  usecase "Notify Maintenance" as UC4
-  usecase "Add Evidence" as UC5
-  usecase "View Incidents" as UC6
-  usecase "Assign Investigator" as UC7
-  usecase "Escalate Incident" as UC8
+  usecase "View My Reports" as UC3
+  usecase "Add Evidence" as UC4
+  usecase "Review Incident Inbox" as UC5
+  usecase "Escalate Incident" as UC6
+  usecase "Delete Incident" as UC7
+  usecase "Assign Investigator" as UC8
   usecase "Close Incident" as UC9
-  usecase "Delete Incident" as UC10
+  usecase "Notify Admin Inbox" as UC10
+  usecase "Notify Authority" as UC11
+  usecase "Notify Incident Management" as UC12
+  usecase "Notify Maintenance" as UC13
 }
 
+Pilot --> UC0
+Admin --> UC0
+Manager --> UC0
 Pilot --> UC1
-Pilot --> UC5
-Pilot --> UC6
-Investigator --> UC5
-Investigator --> UC6
-Investigator --> UC7
-Investigator --> UC8
-Investigator --> UC9
-Investigator --> UC10
+Pilot --> UC3
+Pilot --> UC4
+Admin --> UC5
+Admin --> UC6
+Admin --> UC7
+Manager --> UC8
+Manager --> UC9
+Manager --> UC4
 
 UC1 ..> UC2 : <<include>>
-UC1 ..> UC3 : <<include>>
-UC8 ..> UC3 : <<include>>
-UC4 ..> UC1 : <<extend>>\n[aircraft grounded]
+UC1 ..> UC10 : <<include>>
+UC1 ..> UC11 : <<include>>
+UC6 ..> UC11 : <<include>>
+UC6 ..> UC12 : <<include>>
+UC13 ..> UC1 : <<extend>>\n[aircraft grounded]
 
-UC3 --> Authority
-UC4 --> Maintenance
+UC11 --> Authority
+UC13 --> Maintenance
 @enduml
 ```
 
+Image: `UML_DIAGRAMS/01-use-case.svg`
+
 ---
 
-## 2. Activity Diagram: Report and handle an incident
+## 2. Activity Diagram: report, escalate, investigate and close an incident
 
-**Swimlanes:** Pilot, ASIMS System and Safety Investigator.
-
-**Notation:**
-- **Fork/join bar:** the observers are notified "in parallel".
-  - This is conceptual. In the code, `notifyObservers()` loops over them one after another.
-- **Decision diamonds:**
-  - Is the severity valid?
-  - Does the aircraft need maintenance?
-  - Is escalation needed?
+Four swimlanes (Pilot, ASIMS System, Admin, Incident Manager), decision diamonds and a fork/join for the notifications.
 
 ```plantuml
 @startuml
+skinparam defaultFontSize 13
 |Pilot|
 start
-:Fill in incident form\n(type, flight, severity, aircraft);
-:Submit report;
+:Log in, fill in and\nsubmit the incident report;
 
 |ASIMS System|
-if (Severity between 1 and 5?) then (no)
-  :Show error message;
+if (Severity 1 to 5?) then (no)
+  :Show error;
   stop
 else (yes)
 endif
-:IncidentFactory.create()\nbuilds correct Incident subclass;
-:IncidentRegistry.add(incident);
-:calculateRiskScore();
+:Factory creates the Incident;\ncalculateRiskScore();\nsave to Registry + Database;
 fork
-  :AuthorityNotifier.update()\n"REPORTED";
+  :Notify admin inbox\nand authority;
 fork again
-  if (requiresMaintenance()?) then (yes)
-    :MaintenanceNotifier.update()\n"Inspect aircraft";
+  if (Aircraft grounded?) then (yes)
+    :Notify maintenance;
   else (no)
   endif
 end fork
 
-|Safety Investigator|
-:Review incident and risk level;
-:assignInvestigator();
-:Add evidence;
-if (Risk is HIGH or CRITICAL?) then (yes)
-  :escalateIncident();
+|Admin|
+:Review the report;
+if (Escalate?) then (yes)
   |ASIMS System|
-  :AuthorityNotifier.update()\n"ESCALATED";
-  |Safety Investigator|
+  :status = ESCALATED, save;\nnotify incident management;
+  |Incident Manager|
+  :Assign investigator\n(UNDER_INVESTIGATION);
+  :Add evidence and findings;
+  :Close the case;
+  |ASIMS System|
+  :status = CLOSED, save;
 else (no)
+  |Admin|
+  :Delete the incident;
 endif
-:closeIncident();
 stop
 @enduml
 ```
 
+Image: `UML_DIAGRAMS/02-activity.svg`
+
 ---
 
-## 3. Class Diagram
+## 3a. Class Diagram, Part A: Domain Model
 
-**Arrow notation:**
-- **Filled diamond (`*--`):** composition. Incident → EvidenceLog.
-- **Hollow diamond (`o--`):** aggregation. Fleet → Aircraft, IncidentRegistry → Incident.
-- **Plain arrow:** association.
-- **Triangle:** inheritance.
-- **Dashed triangle:** implements an interface.
-
-```plantuml
-@startuml
-skinparam classAttributeIconSize 0
-hide empty members
-
-package model {
-  enum IncidentStatus {
-    REPORTED
-    UNDER_INVESTIGATION
-    ESCALATED
-    CLOSED
-  }
-
-  abstract class Incident {
-    - id : String
-    - flightNumber : String
-    - location : String
-    - reportedAt : String
-    - severity : int
-    - status : IncidentStatus
-    - aircraft : Aircraft
-    - reportedBy : Pilot
-    - assignedInvestigator : Investigator
-    - evidenceLogs : List<EvidenceLog>
-    # Incident(id, flightNumber, location, severity, aircraft, reportedBy)
-    + {abstract} calculateRiskScore() : int
-    + {abstract} getType() : String
-    + {abstract} getDetails() : String
-    + requiresMaintenance() : boolean
-    + getRiskLevel() : String
-    + addEvidence(description : String, collectedBy : String) : EvidenceLog
-    + assignInvestigator(investigator : Investigator) : void
-    + escalate() : void
-    + close() : void
-    + setSeverity(severity : int) : void
-    + getEvidenceLogs() : List<EvidenceLog>
-  }
-
-  class TechnicalIncident {
-    - aircraftSystem : String
-    - grounded : boolean
-    + calculateRiskScore() : int
-    + requiresMaintenance() : boolean
-    + getType() : String
-    + getDetails() : String
-    - isCriticalSystem() : boolean
-  }
-
-  class WeatherIncident {
-    - weatherType : String
-    - turbulenceLevel : int
-    + calculateRiskScore() : int
-    + getType() : String
-    + getDetails() : String
-  }
-
-  class AirspaceIncident {
-    - separationNm : double
-    + calculateRiskScore() : int
-    + getType() : String
-    + getDetails() : String
-  }
-
-  class EvidenceLog {
-    - id : String
-    - description : String
-    - collectedBy : String
-    - collectedAt : String
-    ~ EvidenceLog(id, description, collectedBy)
-  }
-
-  abstract class StaffMember {
-    - id : String
-    - name : String
-    + {abstract} getRole() : String
-  }
-
-  class Pilot {
-    - rank : String
-    + getRole() : String
-  }
-
-  class Investigator {
-    - specialization : String
-    + getRole() : String
-  }
-
-  class Aircraft {
-    - registration : String
-    - model : String
-  }
-
-  class Fleet {
-    - airlineName : String
-    - aircraftList : List<Aircraft>
-    + addAircraft(aircraft : Aircraft) : void
-    + removeAircraft(aircraft : Aircraft) : void
-    + findAircraft(registration : String) : Aircraft
-  }
-}
-
-package pattern {
-  class IncidentRegistry <<Singleton>> {
-    - {static} instance : IncidentRegistry
-    - incidents : Map<String, Incident>
-    - nextNumber : int
-    - IncidentRegistry()
-    + {static} getInstance() : IncidentRegistry
-    + generateId() : String
-    + add(incident : Incident) : void
-    + findById(id : String) : Incident
-    + remove(id : String) : void
-    + getAll() : List<Incident>
-  }
-
-  class IncidentFactory <<Factory>> {
-    + {static} create(type, id, flightNumber, location, severity, aircraft, reportedBy, extra) : Incident
-  }
-
-  interface IncidentObserver <<Observer>> {
-    + update(event : String, incident : Incident) : void
-    + getName() : String
-    + getNotifications() : List<String>
-  }
-
-  class AuthorityNotifier {
-    - notifications : List<String>
-  }
-
-  class MaintenanceNotifier {
-    - notifications : List<String>
-  }
-
-  class IncidentService <<Facade>> {
-    - registry : IncidentRegistry
-    - fleet : Fleet
-    - pilots : Map<String, Pilot>
-    - investigators : Map<String, Investigator>
-    - observers : List<IncidentObserver>
-    + addObserver(observer : IncidentObserver) : void
-    - notifyObservers(event : String, incident : Incident) : void
-    + reportIncident(type, flightNumber, location, severity, aircraftRegistration, pilotId, extra) : Incident
-    + assignInvestigator(incidentId : String, investigatorId : String) : void
-    + addEvidence(incidentId : String, description : String, collectedBy : String) : void
-    + escalateIncident(incidentId : String) : void
-    + closeIncident(incidentId : String) : void
-    + deleteIncident(incidentId : String) : void
-  }
-}
-
-package web {
-  class WebServer {
-    - service : IncidentService
-    + start(port : int) : void
-  }
-}
-
-' Inheritance
-Incident <|-- TechnicalIncident
-Incident <|-- WeatherIncident
-Incident <|-- AirspaceIncident
-StaffMember <|-- Pilot
-StaffMember <|-- Investigator
-IncidentObserver <|.. AuthorityNotifier
-IncidentObserver <|.. MaintenanceNotifier
-
-' Composition and aggregation
-Incident "1" *-- "0..*" EvidenceLog : owns >
-Fleet "1" o-- "0..*" Aircraft : contains >
-IncidentRegistry "1" o-- "0..*" Incident : stores >
-
-' Associations
-Incident "0..*" --> "1" Aircraft : involves >
-Pilot "1" <-- "0..*" Incident : reportedBy
-Investigator "0..1" <-- "0..*" Incident : assignedInvestigator
-Incident --> IncidentStatus
-
-' Pattern wiring
-IncidentService --> "1" IncidentRegistry
-IncidentService --> "1" Fleet
-IncidentService --> "0..*" IncidentObserver : notifies >
-IncidentService ..> IncidentFactory : <<use>>
-IncidentFactory ..> TechnicalIncident : <<create>>
-IncidentFactory ..> WeatherIncident : <<create>>
-IncidentFactory ..> AirspaceIncident : <<create>>
-WebServer --> "1" IncidentService
-@enduml
-```
-
-### 3a. Class Diagram, Part A: Domain Model (used in the printed report)
-
-The full class diagram above is too wide to read on A4 paper, so the report splits it into two parts. The names and relationships are identical to the full diagram.
+Classes of the `model` package: inheritance, composition (`*--`, Incident to EvidenceLog), aggregation (`o--`, Fleet to Aircraft) and associations with multiplicities.
 
 ```plantuml
 @startuml
@@ -329,8 +130,8 @@ title Class Diagram (Part A): Domain Model — package com.asims.model
 
 enum IncidentStatus {
   REPORTED
-  UNDER_INVESTIGATION
   ESCALATED
+  UNDER_INVESTIGATION
   CLOSED
 }
 
@@ -349,13 +150,16 @@ abstract class Incident {
   + {abstract} calculateRiskScore() : int
   + {abstract} getType() : String
   + {abstract} getDetails() : String
+  + {abstract} getExtraFields() : Map<String, String>
   + requiresMaintenance() : boolean
   + getRiskLevel() : String
   + addEvidence(description : String, collectedBy : String) : EvidenceLog
-  + assignInvestigator(investigator : Investigator) : void
   + escalate() : void
+  + assignInvestigator(investigator : Investigator) : void
   + close() : void
   + setSeverity(severity : int) : void
+  + restoreState(reportedAt, status, investigator) : void
+  + restoreEvidence(id, description, collectedBy, collectedAt) : void
   + getEvidenceLogs() : List<EvidenceLog>
 }
 
@@ -366,7 +170,7 @@ class TechnicalIncident {
   + requiresMaintenance() : boolean
   + getType() : String
   + getDetails() : String
-  - isCriticalSystem() : boolean
+  + getExtraFields() : Map<String, String>
 }
 
 class WeatherIncident {
@@ -375,6 +179,7 @@ class WeatherIncident {
   + calculateRiskScore() : int
   + getType() : String
   + getDetails() : String
+  + getExtraFields() : Map<String, String>
 }
 
 class AirspaceIncident {
@@ -382,6 +187,7 @@ class AirspaceIncident {
   + calculateRiskScore() : int
   + getType() : String
   + getDetails() : String
+  + getExtraFields() : Map<String, String>
 }
 
 class EvidenceLog {
@@ -390,6 +196,7 @@ class EvidenceLog {
   - collectedBy : String
   - collectedAt : String
   ~ EvidenceLog(id, description, collectedBy)
+  ~ EvidenceLog(id, description, collectedBy, collectedAt)
 }
 
 abstract class StaffMember {
@@ -434,6 +241,7 @@ Incident "0..*" -right-> "1" Pilot : reportedBy >
 Incident "0..*" -right-> "0..1" Investigator : assignedInvestigator >
 Incident -left-> IncidentStatus
 EvidenceLog -[hidden]down- IncidentStatus
+
 together {
   abstract class StaffMember
   class Pilot
@@ -447,13 +255,19 @@ Investigator -[hidden]down- Fleet
 @enduml
 ```
 
-### 3b. Class Diagram, Part B: Design Patterns and Web Layer (used in the printed report)
+Image: `UML_DIAGRAMS/03a-class-model.svg`
+
+---
+
+## 3b. Class Diagram, Part B: Design Patterns, Facade and Web Layer
+
+The four GoF patterns with their stereotypes (Singleton, Factory, Observer, Facade) and the web server.
 
 ```plantuml
 @startuml
 skinparam classAttributeIconSize 0
 hide empty members
-title Class Diagram (Part B): Design Patterns and Web — packages com.asims.pattern, com.asims.web
+title Class Diagram (Part B): Design Patterns, Facade and Web Layer
 
 package model <<Frame>> {
   abstract class Incident
@@ -486,44 +300,53 @@ interface IncidentObserver <<Observer>> {
   + getNotifications() : List<String>
 }
 
-class AuthorityNotifier {
-  - notifications : List<String>
-  + update(event : String, incident : Incident) : void
-}
-
-class MaintenanceNotifier {
-  - notifications : List<String>
-  + update(event : String, incident : Incident) : void
-}
+class AdminNotifier
+class IncidentManagementNotifier
+class AuthorityNotifier
+class MaintenanceNotifier
 
 class IncidentService <<Facade>> {
   - registry : IncidentRegistry
   - fleet : Fleet
-  - pilots : Map<String, Pilot>
-  - investigators : Map<String, Investigator>
+  - repository : IncidentRepository
   - observers : List<IncidentObserver>
   + addObserver(observer : IncidentObserver) : void
   - notifyObservers(event : String, incident : Incident) : void
-  + reportIncident(type, flightNumber, location, severity, aircraftRegistration, pilotId, extra) : Incident
-  + assignInvestigator(incidentId : String, investigatorId : String) : void
-  + addEvidence(incidentId : String, description : String, collectedBy : String) : void
-  + escalateIncident(incidentId : String) : void
-  + closeIncident(incidentId : String) : void
-  + deleteIncident(incidentId : String) : void
+  + loadFromDatabase() : void
+  + rebuildInboxes() : void
+  + reportIncident(actor : Account, type, flightNumber, location, severity, aircraftRegistration, extra) : Incident
+  + escalateIncident(actor : Account, incidentId : String) : void
+  + assignInvestigator(actor : Account, incidentId : String, investigatorId : String) : void
+  + addEvidence(actor : Account, incidentId : String, description : String) : void
+  + closeIncident(actor : Account, incidentId : String) : void
+  + deleteIncident(actor : Account, incidentId : String) : void
+  + getIncidentsFor(actor : Account) : List<Incident>
+  - requirePermission(actor : Account, permission : Permission) : void
 }
 
 class WebServer {
   - service : IncidentService
+  - auth : AuthService
   + start(port : int) : void
 }
 
+class IncidentRepository
+class Account
+class AuthService
+
+IncidentObserver <|.. AdminNotifier
+IncidentObserver <|.. IncidentManagementNotifier
 IncidentObserver <|.. AuthorityNotifier
 IncidentObserver <|.. MaintenanceNotifier
+
 WebServer --> "1" IncidentService
+WebServer --> "1" AuthService
 IncidentService --> "1" IncidentRegistry
 IncidentService --> "1" Fleet
+IncidentService --> "1" IncidentRepository
 IncidentService --> "0..*" IncidentObserver : notifies >
 IncidentService ..> IncidentFactory : <<use>>
+IncidentService ..> Account : <<checks role of>>
 IncidentRegistry "1" o-- "0..*" Incident : stores >
 IncidentFactory ..> TechnicalIncident : <<create>>
 IncidentFactory ..> WeatherIncident : <<create>>
@@ -534,21 +357,143 @@ Incident <|-- AirspaceIncident
 @enduml
 ```
 
+Image: `UML_DIAGRAMS/03b-class-patterns.svg`
+
 ---
 
-## 4. Object Diagram: snapshot right after startup
+## 3c. Class Diagram, Part C: Login, Roles and Database
 
-This is the state built by `Main.loadSampleIncidents()`.
+Roles and permissions, accounts, password hashing, sessions and the repositories that talk to SQLite.
 
 ```plantuml
 @startuml
-object "registry : IncidentRegistry" as registry
+skinparam classAttributeIconSize 0
+hide empty members
+title Class Diagram (Part C): Login, Roles and Database — packages com.asims.auth, com.asims.repository
+
+enum Permission {
+  REPORT_INCIDENT
+  ADD_EVIDENCE
+  ESCALATE_INCIDENT
+  DELETE_INCIDENT
+  ASSIGN_INVESTIGATOR
+  CLOSE_INCIDENT
+}
+
+enum Role {
+  PILOT
+  ADMIN
+  INCIDENT_MANAGER
+  - label : String
+  - homePath : String
+  + {abstract} canView(incident : Incident, user : Account) : boolean
+  + has(permission : Permission) : boolean
+  + getLabel() : String
+  + getHomePath() : String
+}
+
+class Account {
+  - username : String
+  - fullName : String
+  - role : Role
+  - staffId : String
+  - passwordHash : String
+  + checkPassword(password : String) : boolean
+  + can(permission : Permission) : boolean
+}
+
+class PasswordHasher {
+  + {static} hash(password : String) : String
+  + {static} matches(password : String, stored : String) : boolean
+}
+
+class AuthService {
+  - accounts : AccountRepository
+  - sessions : Map<String, Account>
+  + login(username : String, password : String) : String
+  + getAccount(token : String) : Account
+  + logout(token : String) : void
+}
+
+class Database {
+  - connection : Connection
+  + {static} openFile(file : Path) : Database
+  + {static} inMemory() : Database
+  + getConnection() : Connection
+}
+
+class AccountRepository {
+  + save(account : Account) : void
+  + findByUsername(username : String) : Account
+  + count() : int
+}
+
+class IncidentRepository {
+  + save(incident : Incident) : void
+  + delete(incidentId : String) : void
+  + loadAll(fleet, pilots, investigators) : List<Incident>
+  + countEvidence(incidentId : String) : int
+}
+
+class AircraftRepository {
+  + save(aircraft : Aircraft) : void
+  + loadAll() : List<Aircraft>
+}
+
+class StaffRepository {
+  + savePilot(pilot : Pilot) : void
+  + saveInvestigator(investigator : Investigator) : void
+  + loadPilots() : List<Pilot>
+  + loadInvestigators() : List<Investigator>
+}
+
+class SeedData {
+  + {static} seedIfEmpty(aircraftRepo, staffRepo, accountRepo, incidentRepo) : void
+}
+
+class IncidentFactory <<Factory>>
+class WebServer
+
+Account "0..*" --> "1" Role
+Role ..> Permission : grants >
+Account ..> PasswordHasher : <<use>>
+AuthService "1" --> "1" AccountRepository
+AuthService "1" o-- "0..*" Account : sessions >
+WebServer --> "1" AuthService
+AccountRepository --> "1" Database
+IncidentRepository --> "1" Database
+AircraftRepository --> "1" Database
+StaffRepository --> "1" Database
+IncidentRepository ..> IncidentFactory : <<rebuilds subclasses>>
+SeedData ..> AircraftRepository
+SeedData ..> StaffRepository
+SeedData ..> AccountRepository
+SeedData ..> IncidentRepository
+@enduml
+```
+
+Image: `UML_DIAGRAMS/03c-class-security.svg`
+
+---
+
+## 4. Object Diagram: system state after start-up
+
+Run-time snapshot using the seeded data (incident INC-103 with its evidence, the pilot, the investigator, the observers and two logged-in accounts).
+
+```plantuml
+@startuml
 object "service : IncidentService" as service
+object "registry : IncidentRegistry" as registry
+object "repo : IncidentRepository" as repo
+object "db : Database" as db {
+  file = "data/asims.db"
+}
+object "auth : AuthService" as auth
 object "fleet : Fleet" as fleet {
   airlineName = "Pakistan International Airlines"
 }
-object "ap_bxk : Aircraft" as ap_bxk {
-  registration = "AP-BXK"
+object "ap_bid : Aircraft" as ap_bid {
+  registration = "AP-BID"
   model = "Boeing 777-300ER"
 }
 object "p1 : Pilot" as p1 {
@@ -561,8 +506,8 @@ object "i1 : Investigator" as i1 {
   name = "Sara Ahmed"
   specialization = "Aircraft Systems"
 }
-object "inc101 : TechnicalIncident" as inc101 {
-  id = "INC-101"
+object "inc103 : TechnicalIncident" as inc103 {
+  id = "INC-103"
   flightNumber = "PK-304"
   location = "Karachi (OPKC)"
   severity = 4
@@ -571,97 +516,131 @@ object "inc101 : TechnicalIncident" as inc101 {
   grounded = true
 }
 object "e1 : EvidenceLog" as e1 {
-  id = "INC-101-E1"
-  description = "Hydraulic system B pressure dropped..."
+  id = "INC-103-E1"
+  collectedBy = "Capt. Tariq Mahmood"
 }
 object "e2 : EvidenceLog" as e2 {
-  id = "INC-101-E2"
-  description = "Fluid leak found near left main gear"
+  id = "INC-103-E2"
+  collectedBy = "Sara Ahmed"
 }
-object "authority : AuthorityNotifier" as authority
-object "maintenance : MaintenanceNotifier" as maintenance
+object "tariq : Account" as tariq {
+  username = "tariq"
+  role = PILOT
+  staffId = "P1"
+}
+object "admin : Account" as admin {
+  username = "admin"
+  role = ADMIN
+}
+object ":AdminNotifier" as an
+object ":IncidentManagementNotifier" as mn
 
 service --> registry
+service --> repo
 service --> fleet
-service --> authority
-service --> maintenance
-fleet o-- ap_bxk
-registry o-- inc101
-inc101 *-- e1
-inc101 *-- e2
-inc101 --> ap_bxk : aircraft
-inc101 --> p1 : reportedBy
-inc101 --> i1 : assignedInvestigator
+service --> an
+service --> mn
+repo --> db
+auth --> db : via AccountRepository
+auth o-- tariq : session
+auth o-- admin : session
+fleet o-- ap_bid
+registry o-- inc103
+inc103 *-- e1
+inc103 *-- e2
+inc103 --> ap_bid : aircraft
+inc103 --> p1 : reportedBy
+inc103 --> i1 : assignedInvestigator
+tariq ..> p1 : staffId
 @enduml
 ```
+
+Image: `UML_DIAGRAMS/04-object.svg`
 
 ---
 
 ## 5. Component Diagram
 
-**Notation:**
-- **Lollipop:** an interface a component *provides*.
-- **Arrow into the lollipop:** another component *requires* that interface.
+Components with provided interfaces (lollipops): REST/JSON API, incident operations, IncidentObserver and JDBC.
 
 ```plantuml
 @startuml
-component "Web Dashboard\n(index.html)" as UI
+component "Portal Pages\n(login, pilot, admin,\nmanager .html)" as UI
 component "WebServer" as WEB
+component "AuthService\n(login, sessions, roles)" as AUTH
 component "IncidentService\n<<Facade>>" as FACADE
 component "IncidentRegistry\n<<Singleton>>" as REG
 component "IncidentFactory\n<<Factory>>" as FAC
-component "Notifiers\n(AuthorityNotifier,\nMaintenanceNotifier)" as OBS
+component "Notifiers\n(Admin, IncidentManagement,\nAuthority, Maintenance)" as OBS
+component "Repositories\n(Incident, Account,\nAircraft, Staff)" as REPO
 component "Domain Model\n(Incident, StaffMember,\nFleet, Aircraft, EvidenceLog)" as MODEL
+database "SQLite database\n(data/asims.db)" as DB
 
 interface "REST / JSON API" as API
 interface "Incident operations" as OPS
 interface "IncidentObserver" as IOBS
+interface "JDBC" as JDBC
 
 WEB - API
 UI ..> API : HTTP
 FACADE - OPS
 WEB ..> OPS
+WEB ..> AUTH
 OBS - IOBS
 FACADE ..> IOBS : notify
 FACADE ..> REG
 FACADE ..> FAC
+FACADE ..> REPO
+AUTH ..> REPO
 FAC ..> MODEL
 REG ..> MODEL
+REPO - JDBC
+DB ..> JDBC
 @enduml
 ```
 
+Image: `UML_DIAGRAMS/05-component.svg`
+
 ---
 
-## 6. Sequence Diagram: Report a grounded technical incident, then escalate it
+## 6. Sequence Diagram: login, report and escalate an incident
+
+Time-ordered messages for a pilot logging in and reporting a grounded technical incident, then the admin escalating it.
 
 ```plantuml
 @startuml
 actor Pilot
-participant "Browser\n(index.html)" as UI
+actor Admin
 participant ":WebServer" as WEB
+participant ":AuthService" as AUTH
 participant ":IncidentService" as SVC
-participant ":Fleet" as FLEET
 participant ":IncidentRegistry" as REG
 participant "IncidentFactory" as FAC
 participant "inc : TechnicalIncident" as INC
-participant ":AuthorityNotifier" as AUTH
-participant ":MaintenanceNotifier" as MAINT
+participant ":IncidentRepository" as REPO
+participant ":AdminNotifier" as ADM
+participant ":IncidentManagementNotifier" as MGT
 
-== Report incident ==
-Pilot -> UI : fill form, click "Report"
-activate UI
-UI -> WEB : POST /api/report
+== Pilot logs in ==
+Pilot -> WEB : POST /api/login (username, password)
 activate WEB
-WEB -> SVC : reportIncident("technical", ...)
+WEB -> AUTH : login(username, password)
+activate AUTH
+AUTH --> WEB : session token
+deactivate AUTH
+WEB --> Pilot : cookie + redirect to /pilot
+deactivate WEB
+
+== Pilot reports a grounded technical incident ==
+Pilot -> WEB : POST /api/report
+activate WEB
+WEB -> AUTH : getAccount(token)
+AUTH --> WEB : pilotAccount
+WEB -> SVC : reportIncident(pilotAccount, "technical", ...)
 activate SVC
-SVC -> FLEET : findAircraft("AP-BXK")
-activate FLEET
-FLEET --> SVC : aircraft
-deactivate FLEET
+SVC -> SVC : requirePermission(REPORT_INCIDENT)
 SVC -> REG : generateId()
-activate REG
-REG --> SVC : "INC-104"
-deactivate REG
+REG --> SVC : "INC-110"
 SVC -> FAC : create("technical", ...)
 activate FAC
 create INC
@@ -669,102 +648,86 @@ FAC -> INC : new TechnicalIncident(...)
 FAC --> SVC : inc
 deactivate FAC
 SVC -> REG : add(inc)
-activate REG
-deactivate REG
-SVC -> SVC : notifyObservers("REPORTED", inc)
-SVC -> AUTH : update("REPORTED", inc)
-activate AUTH
-AUTH -> INC : calculateRiskScore()
-INC --> AUTH : 88
-deactivate AUTH
-SVC -> MAINT : update("REPORTED", inc)
-activate MAINT
-MAINT -> INC : requiresMaintenance()
-INC --> MAINT : true
-deactivate MAINT
+SVC -> REPO : save(inc)
+SVC -> ADM : update("REPORTED", inc)
+activate ADM
+ADM -> INC : calculateRiskScore()
+INC --> ADM : 88
+deactivate ADM
 SVC --> WEB : inc
 deactivate SVC
-WEB --> UI : {"ok": true}
+WEB --> Pilot : {"ok": true}
 deactivate WEB
-UI --> Pilot : updated incident table
-deactivate UI
 
-== Escalate incident ==
-Pilot -> UI : click "Escalate"
-activate UI
-UI -> WEB : POST /api/escalate
+== Admin escalates it ==
+Admin -> WEB : POST /api/escalate
 activate WEB
-WEB -> SVC : escalateIncident("INC-104")
+WEB -> SVC : escalateIncident(adminAccount, "INC-110")
 activate SVC
-SVC -> REG : findById("INC-104")
-activate REG
+SVC -> SVC : requirePermission(ESCALATE_INCIDENT)
+SVC -> REG : findById("INC-110")
 REG --> SVC : inc
-deactivate REG
 SVC -> INC : escalate()
-SVC -> SVC : notifyObservers("ESCALATED", inc)
-SVC -> AUTH : update("ESCALATED", inc)
-activate AUTH
-deactivate AUTH
-SVC -> MAINT : update("ESCALATED", inc)
-activate MAINT
-deactivate MAINT
+SVC -> REPO : save(inc)
+SVC -> MGT : update("ESCALATED", inc)
 SVC --> WEB : (void)
 deactivate SVC
-WEB --> UI : {"ok": true}
+WEB --> Admin : {"ok": true}
 deactivate WEB
-UI --> Pilot : status shows ESCALATED
-deactivate UI
 @enduml
 ```
 
+Image: `UML_DIAGRAMS/06-sequence.svg`
+
 ---
 
-## 7. Communication Diagram (same scenario as the sequence diagram)
+## 7. Communication Diagram: login, report and escalate
 
-This shows the same messages as the sequence diagram, but arranged around the **links between objects** instead of along a timeline. The message numbers give the order. PlantUML has no dedicated communication-diagram type, so it is drawn with objects and numbered labels on the links.
+The same scenario as the sequence diagram, drawn as numbered messages on object links.
 
 ```plantuml
 @startuml
 left to right direction
-object "ui : Browser" as UI
+object "pilot : Browser" as P
+object "admin : Browser" as A
 object ":WebServer" as WEB
+object ":AuthService" as AUTH
 object ":IncidentService" as SVC
-object ":Fleet" as FLEET
 object ":IncidentRegistry" as REG
 object "IncidentFactory" as FAC
 object "inc : TechnicalIncident" as INC
-object ":AuthorityNotifier" as AUTH
-object ":MaintenanceNotifier" as MAINT
+object ":IncidentRepository" as REPO
+object ":AdminNotifier" as ADM
+object ":IncidentManagementNotifier" as MGT
 
-UI --> WEB : 1: POST /api/report\n2: POST /api/escalate
-WEB --> SVC : 1.1: reportIncident(...)\n2.1: escalateIncident(id)
-SVC --> FLEET : 1.1.1: findAircraft(reg)
-SVC --> REG : 1.1.2: generateId()\n1.1.4: add(inc)\n2.1.1: findById(id)
-SVC --> FAC : 1.1.3: create(type, ...)
-FAC --> INC : 1.1.3.1: <<create>>
-SVC --> INC : 2.1.2: escalate()
-SVC --> AUTH : 1.1.5: update("REPORTED", inc)\n2.1.3: update("ESCALATED", inc)
-SVC --> MAINT : 1.1.6: update("REPORTED", inc)\n2.1.4: update("ESCALATED", inc)
-AUTH --> INC : 1.1.5.1: calculateRiskScore()
-MAINT --> INC : 1.1.6.1: requiresMaintenance()
+P --> WEB : 1: POST /api/login\n2: POST /api/report
+A --> WEB : 3: POST /api/escalate
+WEB --> AUTH : 1.1: login(username, password)\n2.1: getAccount(token)\n3.1: getAccount(token)
+WEB --> SVC : 2.2: reportIncident(account, ...)\n3.2: escalateIncident(account, id)
+SVC --> REG : 2.2.1: generateId()\n2.2.3: add(inc)\n3.2.1: findById(id)
+SVC --> FAC : 2.2.2: create(type, ...)
+FAC --> INC : 2.2.2.1: <<create>>
+SVC --> REPO : 2.2.4: save(inc)\n3.2.3: save(inc)
+SVC --> ADM : 2.2.5: update("REPORTED", inc)
+SVC --> INC : 3.2.2: escalate()
+SVC --> MGT : 3.2.4: update("ESCALATED", inc)
+ADM --> INC : 2.2.5.1: calculateRiskScore()
 @enduml
 ```
+
+Image: `UML_DIAGRAMS/07-communication.svg`
 
 ---
 
 ## 8. Deployment Diagram
 
-**Nodes:**
-- **Client workstation:** runs a web browser.
-- **Application server:** runs the Java program (JVM 17+).
-- **Storage:** data is kept **in memory** inside the JVM. There is no separate database server.
-- **External notifications:** simulated inside the app. The notifiers store messages instead of contacting real external systems.
+Client workstation with a web browser, and the application server (JVM) that holds the SQLite database file.
 
 ```plantuml
 @startuml
 node "Client Workstation" as client {
   node "Web Browser" {
-    artifact "index.html\n(HTML/CSS/JS)" as html
+    artifact "login.html, pilot.html,\nadmin.html, manager.html\n(HTML/CSS/JS)" as html
   }
 }
 
@@ -772,12 +735,20 @@ node "Application Server" as server {
   node "Java Runtime (JVM 17+)" {
     artifact "asims-1.0 classes\n(com.asims.*)" as app
     artifact "gson-2.11.0.jar" as gson
-    database "In-memory store\n(IncidentRegistry)" as mem
+    artifact "sqlite-jdbc-3.47.jar" as jdbc
+  }
+  node "File System" {
+    database "SQLite database file\ndata/asims.db" as db
   }
 }
 
-client -- server : HTTP / REST (JSON)\nlocalhost:8000
+client -- server : HTTP / REST (JSON)\nsession cookie, localhost:8000
 app ..> gson
-app ..> mem
+app ..> jdbc
+jdbc ..> db : JDBC
 @enduml
 ```
+
+Image: `UML_DIAGRAMS/08-deployment.svg`
+
+---
